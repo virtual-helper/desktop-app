@@ -140,11 +140,14 @@ export default function Merger() {
 
   return (
     <div className="p-6 min-h-full">
+      {/* Tool Header */}
       <div className="mb-6">
-        <h1 className="text-lg font-semibold text-gray-100">Excel → Word 数据填充</h1>
+        <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          Excel → Word 数据填充
+        </h1>
         <p className="text-gray-500 text-sm mt-1">
           在 Word 模板中使用{' '}
-          <code className="bg-gray-800 text-indigo-400 px-1.5 py-0.5 rounded text-xs font-mono">
+          <code className="bg-gray-100 dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded text-xs font-mono">
             {'{列名}'}
           </code>{' '}
           作为占位符，程序将自动替换为 Excel 对应列的数据
@@ -181,20 +184,22 @@ export default function Merger() {
 
       {/* Excel Data Table */}
       {excelData && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl mb-5 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl mb-5 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
             <div className="flex items-center gap-2">
               <StepBadge n={3} done={false} />
-              <span className="text-sm font-medium text-gray-200">选择要填入的数据行</span>
+              <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                选择要填入的数据行
+              </span>
             </div>
-            <span className="text-xs text-gray-500 bg-gray-800 px-2.5 py-1 rounded-full">
+            <span className="text-xs text-gray-500 bg-gray-100 dark:bg-gray-800 px-2.5 py-1 rounded-full">
               已选第 {selectedRow + 1} 行
             </span>
           </div>
           <div className="overflow-auto max-h-52">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-gray-600 text-xs">
+                <tr className="text-gray-400 dark:text-gray-600 text-xs">
                   <th className="py-2 pl-4 pr-2 text-left font-normal w-10">#</th>
                   {excelData.headers.map((h) => (
                     <th key={h} className="py-2 px-3 text-left font-normal whitespace-nowrap">
@@ -211,10 +216,10 @@ export default function Merger() {
                       setSelectedRow(i)
                       setPreviewHtml(null)
                     }}
-                    className={`border-t border-gray-800/60 cursor-pointer transition-colors ${
+                    className={`border-t border-gray-100 dark:border-gray-800/60 cursor-pointer transition-colors ${
                       i === selectedRow
-                        ? 'bg-indigo-950/50 text-gray-100'
-                        : 'text-gray-400 hover:bg-gray-800/50'
+                        ? 'bg-indigo-50 dark:bg-indigo-950/50 text-gray-900 dark:text-gray-100'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50'
                     }`}
                   >
                     <td className="py-2.5 pl-4 pr-2">
@@ -222,7 +227,7 @@ export default function Merger() {
                         className={`inline-flex w-5 h-5 rounded-full items-center justify-center text-xs border ${
                           i === selectedRow
                             ? 'bg-indigo-500 border-indigo-500 text-white'
-                            : 'border-gray-700 text-gray-600'
+                            : 'border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-600'
                         }`}
                       >
                         {i === selectedRow ? '✓' : i + 1}
@@ -246,13 +251,13 @@ export default function Merger() {
 
       {/* Error / Success */}
       {error && (
-        <div className="flex items-start gap-2 bg-red-950/40 border border-red-500/30 text-red-300 rounded-lg px-4 py-3 mb-4 text-sm">
+        <div className="flex items-start gap-2 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-300 rounded-lg px-4 py-3 mb-4 text-sm">
           <span className="mt-0.5 flex-shrink-0">⚠</span>
           <span>{error}</span>
         </div>
       )}
       {saveSuccess && (
-        <div className="flex items-center gap-2 bg-green-950/40 border border-green-500/30 text-green-300 rounded-lg px-4 py-3 mb-4 text-sm">
+        <div className="flex items-center gap-2 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-500/30 text-green-600 dark:text-green-300 rounded-lg px-4 py-3 mb-4 text-sm">
           <span className="flex-shrink-0">✓</span>
           <span>{saveSuccess}</span>
         </div>
@@ -263,19 +268,19 @@ export default function Merger() {
         <button
           onClick={handlePreview}
           disabled={!canMerge || isProcessing}
-          className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded-lg font-medium text-sm transition-colors"
+          className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-400 dark:disabled:text-gray-600 text-white rounded-lg font-medium text-sm transition-colors"
         >
           {isProcessing ? '处理中…' : '预览效果'}
         </button>
         <button
           onClick={handleSave}
           disabled={!canMerge || isProcessing}
-          className="flex items-center gap-2 px-5 py-2.5 bg-gray-800 hover:bg-gray-700 disabled:bg-gray-900 disabled:text-gray-700 text-gray-200 border border-gray-700 disabled:border-gray-800 rounded-lg font-medium text-sm transition-colors"
+          className="flex items-center gap-2 px-5 py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:bg-gray-50 dark:disabled:bg-gray-900 disabled:text-gray-400 dark:disabled:text-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 disabled:border-gray-100 dark:disabled:border-gray-800 rounded-lg font-medium text-sm transition-colors"
         >
           保存文档
         </button>
         {!canMerge && (
-          <span className="text-gray-600 text-xs">
+          <span className="text-gray-400 dark:text-gray-600 text-xs">
             {!excelData && !wordBuffer
               ? '请先上传两个文件'
               : !excelData
@@ -287,12 +292,12 @@ export default function Merger() {
 
       {/* Preview */}
       {previewHtml !== null && (
-        <div className="rounded-xl overflow-hidden border border-gray-700">
-          <div className="bg-gray-800 px-4 py-2.5 flex items-center gap-1.5 border-b border-gray-700">
-            <span className="w-3 h-3 rounded-full bg-red-500/70" />
-            <span className="w-3 h-3 rounded-full bg-yellow-500/70" />
-            <span className="w-3 h-3 rounded-full bg-green-500/70" />
-            <span className="ml-3 text-gray-400 text-xs">文档预览</span>
+        <div className="rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
+          <div className="bg-gray-100 dark:bg-gray-800 px-4 py-2.5 flex items-center gap-1.5 border-b border-gray-200 dark:border-gray-700">
+            <span className="w-3 h-3 rounded-full bg-red-400/70" />
+            <span className="w-3 h-3 rounded-full bg-yellow-400/70" />
+            <span className="w-3 h-3 rounded-full bg-green-400/70" />
+            <span className="ml-3 text-gray-500 dark:text-gray-400 text-xs">文档预览</span>
           </div>
           <div className="bg-white overflow-auto max-h-[520px]">
             <div
@@ -335,8 +340,8 @@ function UploadCard({
     <div
       className={`border rounded-xl p-5 cursor-pointer transition-all group ${
         done
-          ? 'border-indigo-500/40 bg-indigo-950/20'
-          : 'border-gray-700 bg-gray-900 hover:border-indigo-500/40 hover:bg-gray-800/50'
+          ? 'border-indigo-300 dark:border-indigo-500/40 bg-indigo-50 dark:bg-indigo-950/20'
+          : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-indigo-300 dark:hover:border-indigo-500/40 hover:bg-gray-50 dark:hover:bg-gray-800/50'
       }`}
       onDrop={onDrop}
       onDragOver={(e) => e.preventDefault()}
@@ -352,22 +357,26 @@ function UploadCard({
       <div className="flex items-start gap-3">
         <StepBadge n={step} done={done} />
         <div className="flex-1 min-w-0">
-          <div className="font-medium text-sm text-gray-200 mb-1">{title}</div>
+          <div className="font-medium text-sm text-gray-800 dark:text-gray-200 mb-1">{title}</div>
           {done ? (
             <>
-              <div className="text-indigo-400 text-sm font-medium truncate">{fileName}</div>
-              {subText && <div className="text-gray-500 text-xs mt-0.5">{subText}</div>}
+              <div className="text-indigo-600 dark:text-indigo-400 text-sm font-medium truncate">
+                {fileName}
+              </div>
+              {subText && (
+                <div className="text-gray-500 text-xs mt-0.5">{subText}</div>
+              )}
             </>
           ) : (
             <>
-              <div className="text-gray-600 text-xs mb-2">{hint}</div>
-              <div className="border border-dashed border-gray-700 group-hover:border-indigo-500/40 rounded-lg py-4 text-center text-gray-600 text-xs transition-colors">
+              <div className="text-gray-400 dark:text-gray-600 text-xs mb-2">{hint}</div>
+              <div className="border border-dashed border-gray-300 dark:border-gray-700 group-hover:border-indigo-300 dark:group-hover:border-indigo-500/40 rounded-lg py-4 text-center text-gray-400 dark:text-gray-600 text-xs transition-colors">
                 点击选择文件，或拖放到此处
               </div>
             </>
           )}
         </div>
-        {done && <span className="text-green-400 text-sm flex-shrink-0 mt-0.5">✓</span>}
+        {done && <span className="text-green-500 dark:text-green-400 text-sm flex-shrink-0 mt-0.5">✓</span>}
       </div>
     </div>
   )
@@ -377,7 +386,9 @@ function StepBadge({ n, done }: { n: number; done: boolean }) {
   return (
     <span
       className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5 ${
-        done ? 'bg-indigo-500 text-white' : 'bg-gray-800 text-gray-400 border border-gray-700'
+        done
+          ? 'bg-indigo-500 text-white'
+          : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-300 dark:border-gray-700'
       }`}
     >
       {done ? '✓' : n}
