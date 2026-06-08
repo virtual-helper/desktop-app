@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
 import { update } from './update'
-import { setupFileHandlers } from './fileHandler'
+import { setupContractHandlers } from './contractHandler'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -83,7 +83,7 @@ async function createWindow() {
 }
 
 app.whenReady().then(createWindow)
-setupFileHandlers()
+setupContractHandlers()
 
 app.on('window-all-closed', () => {
   win = null

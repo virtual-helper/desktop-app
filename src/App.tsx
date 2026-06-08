@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import Merger from '@/components/merger'
+import ContractGenerator from '@/components/contract-generator'
 import './App.css'
 
 interface ToolItem {
@@ -18,7 +18,7 @@ const TOOL_CATEGORIES: ToolCategory[] = [
   {
     label: '文档工具',
     items: [
-      { id: 'excel-word', label: 'Excel→Word 填充', icon: '📋', component: Merger },
+      { id: 'contract-gen', label: '协议批量生成', icon: '📑', component: ContractGenerator },
     ],
   },
 ]
@@ -28,7 +28,7 @@ const TOOL_MAP = Object.fromEntries(
 )
 
 function App() {
-  const [activeToolId, setActiveToolId] = useState('excel-word')
+  const [activeToolId, setActiveToolId] = useState('contract-gen')
   const [collapsed, setCollapsed] = useState(false)
   const ActiveTool = TOOL_MAP[activeToolId]
 

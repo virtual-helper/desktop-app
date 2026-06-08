@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(python3 *)",
+      "Bash(pip3 install *)",
+      "Read(//Users/fuqiang/.nvm/versions/node/**)",
+      "Bash(command -v nodejs)",
+      "Read(//Users/fuqiang/**)"
     ]
   }
 }
