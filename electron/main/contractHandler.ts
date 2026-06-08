@@ -129,9 +129,9 @@ function buildTableXml(
     const childCells: string[] = []
     for (const ph of parentHeaders) {
       if (ph.span <= 1) {
-        // No parent text → vertically merge: text in parent, child is continue
-        parentCells.push(cellXml(headers[colOffset] ?? ph.text, true, colPct(colOffset), 'restart'))
-        childCells.push(cellXml('', true, colPct(colOffset), 'continue'))
+        // No parent text → no vertical merge, header text in child row
+        parentCells.push(cellXml(ph.text, true, colPct(colOffset)))
+        childCells.push(cellXml(headers[colOffset] ?? '', true, colPct(colOffset)))
       } else {
         const spanWidth = ph.span > 1 && colOffset + ph.span - 1 === n - 1
           ? 312 * (ph.span - 1) + 313

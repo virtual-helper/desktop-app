@@ -25,6 +25,25 @@ const NONE = ''
 const AUTO_APPENDIX_KEY = '附录A'
 const EMPTY_TABLE: SheetTable = { headers: [], rows: [] }
 
+// Normalise Excel number-format strings that XLSX.SSF doesn't recognise
+// (e.g. "###,###,##0.00" → "#,##0.00") so we can format them ourselves.
+function normalizeNumFmt(z: string): string {
+  return z.replace(/#{1,3},#{1,3},#{1,3}0/g, '#,##0')
+}
+
+// Format a single cell value to its display string, honouring the cell's
+// number format.  `sheet_to_json` with `raw: false` skips cells whose format
+// string is unsupported (w = undefined), so we read cells individually and
+// fall back to XLSX.SSF.format with a normalised format string.
+function cellText(cell: XLSX.CellObject): string {
+  if (cell.w !== undefined) return cell.w           // library-provided formatted text
+  if (cell.t === 'n' && cell.z) {                    // number with custom format
+    try { return XLSX.SSF.format(normalizeNumFmt(cell.z), cell.v as number) }
+    catch { /* fall through */ }
+  }
+  return String(cell.v ?? '')
+}
+
 // Read every sheet as a raw matrix; the header row is chosen later, because
 // real-world sheets often have title/merged rows above the actual headers.
 function readAllSheets(wb: XLSX.WorkBook): WorkbookState {
@@ -33,23 +52,27 @@ function readAllSheets(wb: XLSX.WorkBook): WorkbookState {
   for (const name of wb.SheetNames) {
     const ws = wb.Sheets[name]
     if (!ws) continue
-    aoa[name] = XLSX.utils
-      .sheet_to_json<unknown[]>(ws, { header: 1, defval: '' })
-      .map((r) => (r as unknown[]).map((v) => String(v ?? '')))
-    // sheet_to_json re-indexes rows/cols from the sheet's !ref origin, but
+    const ref = ws['!ref']
+    const rows: string[][] = []
+    if (ref) {
+      const rng = XLSX.utils.decode_range(ref)
+      for (let r = rng.s.r; r <= rng.e.r; r++) {
+        const row: string[] = []
+        for (let c = rng.s.c; c <= rng.e.c; c++) {
+          const cell = ws[XLSX.utils.encode_cell({ r, c })]
+          row.push(cell ? cellText(cell) : '')
+        }
+        rows.push(row)
+      }
+    }
+    aoa[name] = rows
     // !merges keeps absolute sheet coordinates. Subtract the !ref origin so
     // merge coordinates line up with aoa indices (e.g. a sheet starting at A2
     // shifts every row up by one).
-    const ref = ws['!ref']
-    let originR = 0, originC = 0
-    if (ref) {
-      const rng = XLSX.utils.decode_range(ref)
-      originR = rng.s.r
-      originC = rng.s.c
-    }
+    const rng = ref ? XLSX.utils.decode_range(ref) : { s: { r: 0, c: 0 } }
     merges[name] = (ws['!merges'] ?? []).map((m) => ({
-      s: { r: m.s.r - originR, c: m.s.c - originC },
-      e: { r: m.e.r - originR, c: m.e.c - originC },
+      s: { r: m.s.r - rng.s.r, c: m.s.c - rng.s.c },
+      e: { r: m.e.r - rng.s.r, c: m.e.c - rng.s.c },
     }))
   }
   const names = wb.SheetNames.filter((n) => aoa[n])
@@ -184,7 +207,7 @@ export default function ContractGenerator() {
       const reader = new FileReader()
       reader.onload = (e) => {
         try {
-          const wb = XLSX.read(e.target?.result as ArrayBuffer, { type: 'array' })
+          const wb = XLSX.read(e.target?.result as ArrayBuffer, { type: 'array', cellNF: true })
           const { aoa, merges, names } = readAllSheets(wb)
           if (!names.length) { setError(`「${file.name}」中没有可用的工作表`); return }
           set({ aoa, merges, names, fileName: file.name })
