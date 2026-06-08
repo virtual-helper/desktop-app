@@ -6,6 +6,11 @@ interface SheetTable {
   rows: Record<string, string>[]
 }
 
+export interface ParentHeader {
+  text: string
+  span: number
+}
+
 interface TableConfig {
   sheet: string             // which attachment sheet to insert for this {{#key}}
   headerRow: number         // 0-based row index that holds the column headers
@@ -22,16 +27,19 @@ const EMPTY_TABLE: SheetTable = { headers: [], rows: [] }
 
 // Read every sheet as a raw matrix; the header row is chosen later, because
 // real-world sheets often have title/merged rows above the actual headers.
-function readAllSheets(wb: XLSX.WorkBook): Record<string, string[][]> {
-  const out: Record<string, string[][]> = {}
+function readAllSheets(wb: XLSX.WorkBook): WorkbookState {
+  const aoa: Record<string, string[][]> = {}
+  const merges: Record<string, XLSX.Range[]> = {}
   for (const name of wb.SheetNames) {
     const ws = wb.Sheets[name]
     if (!ws) continue
-    out[name] = XLSX.utils
+    aoa[name] = XLSX.utils
       .sheet_to_json<unknown[]>(ws, { header: 1, defval: '' })
       .map((r) => (r as unknown[]).map((v) => String(v ?? '')))
+    merges[name] = ws['!merges'] ?? []
   }
-  return out
+  const names = wb.SheetNames.filter((n) => aoa[n])
+  return { aoa, merges, names, fileName: '' }
 }
 
 // Guess the header row: the one (within the first rows) with the most non-empty cells.
@@ -56,7 +64,50 @@ function deriveHeaders(aoa: string[][], headerRow: number): string[] {
   })
 }
 
-// Turn a raw matrix into a header/rows table using the chosen header row.
+// Derive parent header row (row above headerRow) accounting for merged cells.
+// Returns null when there is no row above, or when that row is all empty.
+function deriveParentHeaders(
+  aoa: string[][],
+  sheetMerges: XLSX.Range[],
+  headerRow: number,
+  selectedCols: number[],  // column indices that are actually used
+): ParentHeader[] | null {
+  const parentRow = headerRow - 1
+  if (parentRow < 0) return null
+  const raw = aoa[parentRow] ?? []
+  // Expand merge info into a colIndex -> { text, span } map for this row.
+  // A horizontal merge on row `parentRow` means multiple consecutive columns share one label.
+  const spanByCol: Record<number, { text: string; span: number }> = {}
+  for (const merge of sheetMerges) {
+    if (merge.s.r !== parentRow || merge.e.r !== parentRow) continue
+    const text = raw[merge.s.c]?.trim() ?? ''
+    for (let c = merge.s.c; c <= merge.e.c; c++) {
+      spanByCol[c] = { text, span: merge.e.c - merge.s.c + 1 }
+    }
+  }
+  // For unmerged cells, span = 1
+  for (let c = 0; c < raw.length; c++) {
+    if (!spanByCol[c]) spanByCol[c] = { text: raw[c]?.trim() ?? '', span: 1 }
+  }
+
+  // Build the parent headers only for the selected columns, collapsing adjacent
+  // columns that belong to the same merge group into a single entry.
+  const result: ParentHeader[] = []
+  let i = 0
+  while (i < selectedCols.length) {
+    const colIdx = selectedCols[i]
+    const entry = spanByCol[colIdx] ?? { text: '', span: 1 }
+    // Count how many of the selected columns fall within this merge group
+    const mergeEnd = colIdx + entry.span - 1
+    let count = 1
+    while (i + count < selectedCols.length && selectedCols[i + count] <= mergeEnd) count++
+    result.push({ text: entry.text, span: count })
+    i += count
+  }
+
+  if (result.every((p) => p.text === '')) return null
+  return result
+}
 function deriveTable(aoa: string[][] | undefined, headerRow: number): SheetTable {
   if (!aoa) return EMPTY_TABLE
   const headers = deriveHeaders(aoa, headerRow)
@@ -80,6 +131,7 @@ function similarity(a: string, b: string): number {
 
 interface WorkbookState {
   aoa: Record<string, string[][]>
+  merges: Record<string, XLSX.Range[]>
   names: string[]
   fileName: string
 }
@@ -119,10 +171,9 @@ export default function ContractGenerator() {
       reader.onload = (e) => {
         try {
           const wb = XLSX.read(e.target?.result as ArrayBuffer, { type: 'array' })
-          const aoa = readAllSheets(wb)
-          const names = wb.SheetNames.filter((n) => aoa[n])
+          const { aoa, merges, names } = readAllSheets(wb)
           if (!names.length) { setError(`「${file.name}」中没有可用的工作表`); return }
-          set({ aoa, names, fileName: file.name })
+          set({ aoa, merges, names, fileName: file.name })
           setError(null); setResult(null)
         } catch { setError(`无法读取「${file.name}」`) }
       }
@@ -280,9 +331,15 @@ export default function ContractGenerator() {
         const table = deriveTable(attach.aoa[sheet], cfg.headerRow)
         const columns = cfg.columns?.filter((c) => table.headers.includes(c))
         const effCols = columns && columns.length ? columns : table.headers
+        // Compute selected column indices (positions in the header row) for parent header span math
+        const allHeaders = deriveHeaders(attach.aoa[sheet], cfg.headerRow)
+        const selectedColIdxs = effCols.map((c) => allHeaders.indexOf(c)).filter((i) => i >= 0)
+        const sheetMerges = attach.merges?.[sheet] ?? []
+        const parentHeaders = deriveParentHeaders(attach.aoa[sheet], sheetMerges, cfg.headerRow, selectedColIdxs)
         return {
           key,
           headers: effCols,
+          parentHeaders: parentHeaders ?? undefined,
           rows: table.rows,
           requireHash: tableKeys.includes(key), // promoted text placeholders have no #
           mergeColumns: (cfg.mergeColumns ?? []).filter((c) => effCols.includes(c)),

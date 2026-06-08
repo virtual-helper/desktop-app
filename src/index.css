@@ -28,15 +28,11 @@ body {
   min-height: 100vh;
 }
 
-/* TipTap editor */
-.ProseMirror {
-  outline: none;
-  min-height: 400px;
-}
-.ProseMirror p { margin: 0.4em 0; }
+/* ── TipTap editor ── */
+.ProseMirror { outline: none; min-height: 400px; }
+.ProseMirror p { margin: 0.4em 0; min-height: 1.4em; }
 .ProseMirror h1, .ProseMirror h2, .ProseMirror h3 { font-weight: 600; margin: 0.8em 0 0.4em; }
 .ProseMirror ul, .ProseMirror ol { padding-left: 1.4em; margin: 0.4em 0; }
-.ProseMirror strong { font-weight: 700; }
 
 /* Field placeholder chip */
 .ph {
@@ -48,11 +44,28 @@ body {
   font-size: 0.92em;
   text-decoration: inherit;
 }
-
 @media (prefers-color-scheme: dark) {
-  .ph {
-    color: #818cf8;
-    background-color: rgba(99, 102, 241, 0.18);
-  }
+  .ph { color: #818cf8; background-color: rgba(99, 102, 241, 0.18); }
 }
 
+/* ── docx-preview overrides ── */
+.docx-wrapper {
+  background: #d1d5db !important;
+  padding: 28px 24px !important;
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+.docx-wrapper > section.docx {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18) !important;
+  margin-bottom: 24px !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  .docx-wrapper {
+    background: #374151 !important;
+  }
+  .docx-wrapper > section.docx {
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45) !important;
+  }
+}

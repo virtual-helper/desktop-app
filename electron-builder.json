@@ -1,6 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "YourAppID",
+  "appId": "com.xenera.virtual-helper",
+  "productName": "VirtualHelper",
   "asar": true,
   "directories": {
     "output": "release/${version}"
@@ -10,28 +11,25 @@
     "dist"
   ],
   "mac": {
-    "artifactName": "${productName}_${version}.${ext}",
+    "artifactName": "${productName}_${version}_mac_${arch}.${ext}",
     "target": [
-      "dmg",
-      "zip"
+      { "target": "dmg", "arch": ["x64", "arm64"] },
+      { "target": "zip", "arch": ["x64", "arm64"] }
     ]
   },
   "win": {
+    "artifactName": "${productName}_${version}_win_${arch}.${ext}",
     "target": [
-      {
-        "target": "nsis",
-        "arch": [
-          "x64"
-        ]
-      },
-      {
-        "target": "portable",
-        "arch": [
-          "x64"
-        ]
-      }
-    ],
-    "artifactName": "${productName}_${version}_${arch}.${ext}"
+      { "target": "nsis", "arch": ["x64"] },
+      { "target": "portable", "arch": ["x64"] }
+    ]
+  },
+  "linux": {
+    "artifactName": "${productName}_${version}_linux_${arch}.${ext}",
+    "target": [
+      { "target": "AppImage", "arch": ["x64"] },
+      { "target": "deb", "arch": ["x64"] }
+    ]
   },
   "nsis": {
     "oneClick": false,
@@ -40,8 +38,6 @@
     "deleteAppDataOnUninstall": false
   },
   "publish": {
-    "provider": "generic",
-    "channel": "latest",
-    "url": "https://github.com/electron-vite/electron-vite-react/releases/download/v0.9.9/"
+    "provider": "github"
   }
 }

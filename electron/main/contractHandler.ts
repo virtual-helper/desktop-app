@@ -10,11 +10,17 @@ export interface SheetTable {
   rows: Record<string, string>[]
 }
 
+export interface ParentHeader {
+  text: string
+  span: number
+}
+
 // One table placeholder and how to fill it. The marker is {{#key}}/【#key】 by
 // default, or a plain {{key}}/【key】 when promoted from a text placeholder in UI.
 export interface TableMapping {
   key: string                 // placeholder name (the part after # if any)
   headers: string[]
+  parentHeaders?: ParentHeader[]  // optional two-level header row above the column names
   rows: Record<string, string>[]
   requireHash?: boolean       // false => marker has no # (promoted text placeholder)
   mergeColumns?: string[]     // columns whose consecutive equal values are vertically merged
@@ -81,9 +87,10 @@ function repairPlaceholders(xml: string): string {
 
 // vMerge: 'restart' starts a vertically-merged group, 'continue' joins it upward.
 // widthPct is the cell width in 50ths of a percent (so 5000 == 100%).
-function cellXml(text: string, bold: boolean, widthPct: number, vMerge?: 'restart' | 'continue'): string {
+function cellXml(text: string, bold: boolean, widthPct: number, vMerge?: 'restart' | 'continue', gridSpan?: number): string {
   const rpr = `<w:rPr><w:rFonts w:ascii="宋体" w:eastAsia="宋体" w:hAnsi="宋体" w:hint="eastAsia"/>${bold ? '<w:b/>' : '<w:bCs/>'}<w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr>`
   const vMergeXml = vMerge === 'restart' ? '<w:vMerge w:val="restart"/>' : vMerge === 'continue' ? '<w:vMerge/>' : ''
+  const gridSpanXml = gridSpan && gridSpan > 1 ? `<w:gridSpan w:val="${gridSpan}"/>` : ''
   // A continued cell carries no text; its content shows from the restart cell above.
   const body =
     vMerge === 'continue'
@@ -92,7 +99,7 @@ function cellXml(text: string, bold: boolean, widthPct: number, vMerge?: 'restar
         `<w:r>${rpr}<w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r></w:p>`
   return (
     '<w:tc>' +
-    `<w:tcPr><w:tcW w:w="${widthPct}" w:type="pct"/>${vMergeXml}<w:vAlign w:val="center"/></w:tcPr>` +
+    `<w:tcPr><w:tcW w:w="${widthPct}" w:type="pct"/>${gridSpanXml}${vMergeXml}<w:vAlign w:val="center"/></w:tcPr>` +
     body +
     '</w:tc>'
   )
@@ -108,6 +115,7 @@ export function buildTableXml(
   headers: string[],
   rows: Record<string, string>[],
   mergeColumns: string[] = [],
+  parentHeaders?: ParentHeader[],
 ): string {
   const borders =
     '<w:tblBorders>' +
@@ -115,24 +123,44 @@ export function buildTableXml(
       .map((s) => `<w:${s} w:val="single" w:sz="4" w:space="0" w:color="auto"/>`)
       .join('') +
     '</w:tblBorders>'
-  // Fill 100% of the text width (5000 == 100% in 50ths-of-a-percent units) and
-  // split it evenly across columns, so the table adapts to portrait/landscape pages.
+  // Distribute table width (5853 pct units, 16017 dxa) evenly across all columns.
+  // Remainder goes to the last column so totals are exact and all columns are equal.
   const n = Math.max(headers.length, 1)
-  const colPct = Math.floor(5853 / n)
-  const colDxa = Math.floor(16017 / n)
-  const grid = '<w:tblGrid>' + headers.map((_, i) => `<w:gridCol w:w="${i >= n - 4 ? colDxa + 4 : colDxa}"/>`).join('') + '</w:tblGrid>'
-  const headerRow = rowXml(headers, true, colPct)
+  const basePct = Math.floor(5853 / n)
+  const pctRem = 5853 - basePct * n
+  const colPcts = Array.from({ length: n }, (_, i) => basePct + (i === n - 1 ? pctRem : 0))
+  const baseDxa = Math.floor(16017 / n)
+  const dxaRem = 16017 - baseDxa * n
+  const colDxas = Array.from({ length: n }, (_, i) => baseDxa + (i === n - 1 ? dxaRem : 0))
+  const grid = '<w:tblGrid>' + colDxas.map((w) => `<w:gridCol w:w="${w}"/>`).join('') + '</w:tblGrid>'
+  // Optional parent header row: cells span multiple columns when gridSpan > 1.
+  const parentRow = parentHeaders && parentHeaders.length > 0
+    ? (() => {
+        let colOffset = 0
+        const cells = parentHeaders.map((ph) => {
+          const spanPct = colPcts.slice(colOffset, colOffset + ph.span).reduce((a, b) => a + b, 0)
+          const cell = cellXml(ph.text, true, spanPct, undefined, ph.span > 1 ? ph.span : undefined)
+          colOffset += ph.span
+          return cell
+        })
+        return '<w:tr><w:trPr><w:trHeight w:val="280"/></w:trPr>' + cells.join('') + '</w:tr>'
+      })()
+    : ''
+  const headerRow =
+    '<w:tr><w:trPr><w:trHeight w:val="280"/></w:trPr>' +
+    headers.map((h, i) => cellXml(h, true, colPcts[i])).join('') +
+    '</w:tr>'
   const mergeSet = new Set(mergeColumns)
   const bodyRows = rows
     .map((r, i) => {
-      const cells = headers.map((h) => {
+      const cells = headers.map((h, hi) => {
         const val = String(r[h] ?? '')
         let vMerge: 'restart' | 'continue' | undefined
         if (mergeSet.has(h)) {
           const prev = i > 0 ? String(rows[i - 1][h] ?? '') : ''
           vMerge = i > 0 && val.trim() !== '' && val === prev ? 'continue' : 'restart'
         }
-        return cellXml(val, false, colPct, vMerge)
+        return cellXml(val, false, colPcts[hi], vMerge)
       })
       return '<w:tr><w:trPr><w:trHeight w:val="280"/></w:trPr>' + cells.join('') + '</w:tr>'
     })
@@ -145,27 +173,70 @@ export function buildTableXml(
     '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/>' +
     '</w:tblPr>' +
     grid +
+    parentRow +
     headerRow +
     bodyRows +
     '</w:tbl>'
   )
 }
 
+// Half-width display units: CJK/fullwidth = 2, everything else = 1.
+function displayWidth(s: string): number {
+  let w = 0
+  for (const ch of s) {
+    w += /[ᄀ-ᅟ〈〉⺀-〾぀-㏿ꥠ-꥿가-힯豈-﫿︐-︙︰-﹯＀-￯￠-￦]/.test(ch) ? 2 : 1
+  }
+  return w
+}
+
+// Trim at most `n` half-width space units from the start of `text`.
+// Regular space = 1 unit, ideographic space (U+3000) = 2 units.
+// Returns [trimmedText, unitsConsumed].
+function trimLeadingSpaces(text: string, n: number): [string, number] {
+  let rem = n, i = 0
+  while (i < text.length && rem > 0) {
+    if (text[i] === ' ') { rem--; i++ }
+    else if (text[i] === '　' && rem >= 2) { rem -= 2; i++ }
+    else break
+  }
+  return [text.slice(i), n - rem]
+}
+
 // Replace every {{name}} / 【name】 (allowing inner whitespace) with the value.
+// When the replacement is wider than the placeholder (display-width comparison),
+// the same number of space units is trimmed from the text that immediately follows,
+// so alignment spaces in the template don't push the rest of the line off-screen.
 export function replaceText(xml: string, values: Record<string, string>): string {
   let out = repairPlaceholders(xml)
   for (const [key, value] of Object.entries(values)) {
     const pattern = keyPattern(key, false)
+    if (!new RegExp(pattern).test(out)) continue
     const valueXml = escapeXml(value)
+    const valueWidth = displayWidth(value)
+    // Replace in runs; embed \x00TRIM:N\x00 after the value when it is wider.
     out = out.replace(/<w:r\b[\s\S]*?<\/w:r>/g, (run) => {
-      const re = new RegExp(pattern, 'g')
-      if (!re.test(run)) return run
+      const m = new RegExp(pattern).exec(run)
+      if (!m) return run
+      const delta = valueWidth - displayWidth(m[0])
+      const marker = delta > 0 ? `\x00TRIM:${delta}\x00` : ''
       return run
-        .replace(new RegExp(pattern, 'g'), valueXml)
+        .replace(new RegExp(pattern, 'g'), valueXml + marker)
         .replace(/<w:highlight\b[^>]*\/>/g, '')
         .replace(/<w:shd\b[^>]*\/>/g, '')
     })
     out = out.replace(new RegExp(pattern, 'g'), valueXml)
+    // Pass 1: trim spaces that immediately follow the marker in the same text node.
+    // If nothing is consumed (no spaces there), the marker is re-emitted for pass 2.
+    out = out.replace(/\x00TRIM:(\d+)\x00([ 　]*)/g, (_, nStr, spaces) => {
+      const [trimmed, consumed] = trimLeadingSpaces(spaces, Number(nStr))
+      const remaining = Number(nStr) - consumed
+      return (remaining > 0 ? `\x00TRIM:${remaining}\x00` : '') + trimmed
+    })
+    // Pass 2: marker is at the end of a text node; trim spaces from the next text node.
+    out = out.replace(/\x00TRIM:(\d+)\x00(<\/w:t>[\s\S]*?<w:t[^>]*>)([ 　]*)/g,
+      (_, nStr, between, spaces) => between + trimLeadingSpaces(spaces, Number(nStr))[0],
+    )
+    out = out.replace(/\x00TRIM:\d+\x00/g, '')
   }
   return out
 }
@@ -521,7 +592,7 @@ export function buildDocx(
       const want = String(row[t.filterMainColumn] ?? '').trim()
       tableRows = t.rows.filter((r) => String(r[t.filterSheetColumn!] ?? '').trim() === want)
     }
-    const tableXml = buildTableXml(t.headers, tableRows, t.mergeColumns)
+    const tableXml = buildTableXml(t.headers, tableRows, t.mergeColumns, t.parentHeaders)
     if (t.autoLocate === true) {
       const beforeAutoLocate = docXml
       try {
