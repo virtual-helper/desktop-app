@@ -105,13 +105,7 @@ function cellXml(text: string, bold: boolean, widthPct: number, vMerge?: 'restar
   )
 }
 
-function rowXml(cells: string[], bold: boolean, widthPct: number): string {
-  return '<w:tr><w:trPr><w:trHeight w:val="280"/></w:trPr>' + cells.map((c) => cellXml(c, bold, widthPct)).join('') + '</w:tr>'
-}
-
-// Build a bordered table from headers + row records keyed by header.
-// Columns listed in `mergeColumns` vertically merge runs of identical, non-empty values.
-export function buildTableXml(
+function buildTableXml(
   headers: string[],
   rows: Record<string, string>[],
   mergeColumns: string[] = [],
@@ -123,33 +117,40 @@ export function buildTableXml(
       .map((s) => `<w:${s} w:val="single" w:sz="4" w:space="0" w:color="auto"/>`)
       .join('') +
     '</w:tblBorders>'
-  // Distribute table width (5853 pct units, 16017 dxa) evenly across all columns.
-  // Remainder goes to the last column so totals are exact and all columns are equal.
+  // Fixed column widths matching the template: all cols 312 pct, last col 313 pct.
   const n = Math.max(headers.length, 1)
-  const basePct = Math.floor(5853 / n)
-  const pctRem = 5853 - basePct * n
-  const colPcts = Array.from({ length: n }, (_, i) => basePct + (i === n - 1 ? pctRem : 0))
-  const baseDxa = Math.floor(16017 / n)
-  const dxaRem = 16017 - baseDxa * n
-  const colDxas = Array.from({ length: n }, (_, i) => baseDxa + (i === n - 1 ? dxaRem : 0))
-  const grid = '<w:tblGrid>' + colDxas.map((w) => `<w:gridCol w:w="${w}"/>`).join('') + '</w:tblGrid>'
-  // Optional parent header row: cells span multiple columns when gridSpan > 1.
-  const parentRow = parentHeaders && parentHeaders.length > 0
-    ? (() => {
-        let colOffset = 0
-        const cells = parentHeaders.map((ph) => {
-          const spanPct = colPcts.slice(colOffset, colOffset + ph.span).reduce((a, b) => a + b, 0)
-          const cell = cellXml(ph.text, true, spanPct, undefined, ph.span > 1 ? ph.span : undefined)
-          colOffset += ph.span
-          return cell
-        })
-        return '<w:tr><w:trPr><w:trHeight w:val="280"/></w:trPr>' + cells.join('') + '</w:tr>'
-      })()
-    : ''
-  const headerRow =
-    '<w:tr><w:trPr><w:trHeight w:val="280"/></w:trPr>' +
-    headers.map((h, i) => cellXml(h, true, colPcts[i])).join('') +
-    '</w:tr>'
+  const colPct = (i: number) => i === n - 1 ? 313 : 312
+  const grid = '<w:tblGrid>' + Array.from({ length: n }, (_, i) => `<w:gridCol w:w="${i === n - 1 ? 1004 : 1001}"/>`).join('') + '</w:tblGrid>'
+  let parentRow = ''
+  let headerRow = ''
+  if (parentHeaders && parentHeaders.length > 0) {
+    let colOffset = 0
+    const parentCells: string[] = []
+    const childCells: string[] = []
+    for (const ph of parentHeaders) {
+      if (ph.span <= 1) {
+        // No parent text → vertically merge: text in parent, child is continue
+        parentCells.push(cellXml(headers[colOffset] ?? ph.text, true, colPct(colOffset), 'restart'))
+        childCells.push(cellXml('', true, colPct(colOffset), 'continue'))
+      } else {
+        const spanWidth = ph.span > 1 && colOffset + ph.span - 1 === n - 1
+          ? 312 * (ph.span - 1) + 313
+          : 312 * ph.span
+        parentCells.push(cellXml(ph.text, true, spanWidth, undefined, ph.span))
+        for (let k = 0; k < ph.span; k++) {
+          childCells.push(cellXml(headers[colOffset + k] ?? '', true, colPct(colOffset + k)))
+        }
+      }
+      colOffset += ph.span
+    }
+    parentRow = '<w:tr><w:trPr><w:trHeight w:val="280"/></w:trPr>' + parentCells.join('') + '</w:tr>'
+    headerRow = '<w:tr><w:trPr><w:trHeight w:val="280"/></w:trPr>' + childCells.join('') + '</w:tr>'
+  } else {
+    headerRow =
+      '<w:tr><w:trPr><w:trHeight w:val="280"/></w:trPr>' +
+      headers.map((h, i) => cellXml(h, true, colPct(i))).join('') +
+      '</w:tr>'
+  }
   const mergeSet = new Set(mergeColumns)
   const bodyRows = rows
     .map((r, i) => {
@@ -160,7 +161,7 @@ export function buildTableXml(
           const prev = i > 0 ? String(rows[i - 1][h] ?? '') : ''
           vMerge = i > 0 && val.trim() !== '' && val === prev ? 'continue' : 'restart'
         }
-        return cellXml(val, false, colPcts[hi], vMerge)
+        return cellXml(val, false, colPct(hi), vMerge)
       })
       return '<w:tr><w:trPr><w:trHeight w:val="280"/></w:trPr>' + cells.join('') + '</w:tr>'
     })
@@ -181,10 +182,27 @@ export function buildTableXml(
 }
 
 // Half-width display units: CJK/fullwidth = 2, everything else = 1.
+function isWide(cp: number): boolean {
+  return (
+    (cp >= 0x1100 && cp <= 0x115f) ||
+    (cp >= 0x2e80 && cp <= 0x303e) ||
+    (cp >= 0x3041 && cp <= 0x33ff) ||
+    (cp >= 0x3400 && cp <= 0x4dbf) ||
+    (cp >= 0x4e00 && cp <= 0x9fff) ||
+    (cp >= 0xa000 && cp <= 0xa4cf) ||
+    (cp >= 0xac00 && cp <= 0xd7a3) ||
+    (cp >= 0xf900 && cp <= 0xfaff) ||
+    (cp >= 0xfe30 && cp <= 0xfe4f) ||
+    (cp >= 0xff00 && cp <= 0xff60) ||
+    (cp >= 0xffe0 && cp <= 0xffe6) ||
+    (cp >= 0x20000 && cp <= 0x3fffd)
+  )
+}
+
 function displayWidth(s: string): number {
   let w = 0
   for (const ch of s) {
-    w += /[ᄀ-ᅟ〈〉⺀-〾぀-㏿ꥠ-꥿가-힯豈-﫿︐-︙︰-﹯＀-￯￠-￦]/.test(ch) ? 2 : 1
+    w += isWide(ch.codePointAt(0)!) ? 2 : 1
   }
   return w
 }

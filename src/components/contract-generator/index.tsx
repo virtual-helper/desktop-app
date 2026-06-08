@@ -36,7 +36,21 @@ function readAllSheets(wb: XLSX.WorkBook): WorkbookState {
     aoa[name] = XLSX.utils
       .sheet_to_json<unknown[]>(ws, { header: 1, defval: '' })
       .map((r) => (r as unknown[]).map((v) => String(v ?? '')))
-    merges[name] = ws['!merges'] ?? []
+    // sheet_to_json re-indexes rows/cols from the sheet's !ref origin, but
+    // !merges keeps absolute sheet coordinates. Subtract the !ref origin so
+    // merge coordinates line up with aoa indices (e.g. a sheet starting at A2
+    // shifts every row up by one).
+    const ref = ws['!ref']
+    let originR = 0, originC = 0
+    if (ref) {
+      const rng = XLSX.utils.decode_range(ref)
+      originR = rng.s.r
+      originC = rng.s.c
+    }
+    merges[name] = (ws['!merges'] ?? []).map((m) => ({
+      s: { r: m.s.r - originR, c: m.s.c - originC },
+      e: { r: m.e.r - originR, c: m.e.c - originC },
+    }))
   }
   const names = wb.SheetNames.filter((n) => aoa[n])
   return { aoa, merges, names, fileName: '' }

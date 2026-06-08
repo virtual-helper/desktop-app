@@ -7,7 +7,10 @@
       "Read(//Users/fuqiang/.nvm/versions/node/**)",
       "Bash(command -v nodejs)",
       "Read(//Users/fuqiang/**)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Read(//tmp/**)",
+      "Read(//c/Users/Administrator/AppData/Local/Temp/tmpl_x/**)",
+      "Read(//c/Users/Administrator/Downloads/分销协议制作/分销协议制作/**)"
     ]
   }
 }
